@@ -743,15 +743,22 @@ def test_mediaquery():
     div {
         text-align: right;
     }
+    .section {
+        color: blue;
+    }
     @media print{
         div {
             text-align: center;
+        }
+        .section {
+            color: red;
         }
     }
     </style>
     </head>
     <body>
     <div>First div</div>
+    <section class="section">First section</section>
     </body>
     </html>"""
 
@@ -760,6 +767,7 @@ def test_mediaquery():
     </head>
     <body>
     <div style="text-align:right" align="right">First div</div>
+    <section style="color:blue;" class="section">First section</section>
     </body>
     </html>"""
 
