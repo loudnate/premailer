@@ -75,12 +75,18 @@ def merge_styles(old, new, class_=''):
                                               in mergeable)))
         return ' '.join(x for x in all if x != '{}')
 
+def make_important(bulk):
+    """makes every property in a string !important.
+    """
+    return ';'.join('%s !important' % p if not p.endswith('!important') else p
+                    for p in bulk.split(';'))
 
 _css_comments = re.compile(r'/\*.*?\*/', re.MULTILINE | re.DOTALL)
 _regex = re.compile('((.*?){(.*?)})', re.DOTALL | re.M)
 _semicolon_regex = re.compile(';(\s+)')
 _colon_regex = re.compile(':(\s+)')
 _element_selector_regex = re.compile(r'(^|\s)\w')
+_cdata_regex = re.compile(r'\<\!\[CDATA\[(.*?)\]\]\>', re.DOTALL)
 _importants = re.compile('\s*!important')
 # These selectors don't apply to all elements. Rather, they specify
 # which elements to apply to.
@@ -96,7 +102,8 @@ class Premailer(object):
                  include_star_selectors=False,
                  remove_classes=True,
                  strip_important=True,
-                 external_styles=None):
+                 external_styles=None,
+                 method="html"):
         self.html = html
         self.base_url = base_url
         self.preserve_internal_links = preserve_internal_links
@@ -110,6 +117,7 @@ class Premailer(object):
             external_styles = [external_styles]
         self.external_styles = external_styles
         self.strip_important = strip_important
+        self.method = method
 
     def _parse_style_rules(self, css_body, ruleset_index):
         leftover = []
@@ -187,8 +195,10 @@ class Premailer(object):
 
             parent_of_style = style.getparent()
             if these_leftover:
-                style.text = '\n'.join(['%s {%s}' % (k, v) for
+                style.text = '\n'.join(['%s {%s}' % (k, make_important(v)) for
                                         (k, v) in these_leftover])
+                if self.method == 'xml':
+                    style.text = etree.CDATA(style.text)
             elif not self.keep_style_tags:
                 parent_of_style.remove(style)
 
@@ -264,10 +274,14 @@ class Premailer(object):
                     if attr == 'href' and self.preserve_internal_links \
                            and parent.attrib[attr].startswith('#'):
                         continue
+                    if not self.base_url.endswith('/'):
+                        self.base_url += '/'
                     parent.attrib[attr] = urlparse.urljoin(self.base_url,
-                                                           parent.attrib[attr])
+                        parent.attrib[attr].strip('/'))
 
-        out = etree.tostring(root, method="html", pretty_print=pretty_print)
+        out = etree.tostring(root, method=self.method, pretty_print=pretty_print)
+        if self.method == 'xml':
+            out = _cdata_regex.sub(lambda m: '/*<![CDATA[*/%s/*]]>*/' % m.group(1), out)
         if self.strip_important:
             out = _importants.sub('', out)
         return out

@@ -326,6 +326,57 @@ def test_base_url_fixer():
     eq_(expect_html, result_html)
 
 
+def test_base_url_with_path():
+    """if you leave some URLS as /foo and set base_url to
+    'http://www.google.com' the URLS become 'http://www.google.com/foo'
+    """
+    if not etree:
+        # can't test it
+        return
+
+    html = '''<html>
+    <head>
+    <title>Title</title>
+    </head>
+    <body>
+    <img src="/images/foo.jpg">
+    <img src="/images/bar.gif">
+    <img src="http://www.googe.com/photos/foo.jpg">
+    <a href="/home">Home</a>
+    <a href="http://www.peterbe.com">External</a>
+    <a href="subpage">Subpage</a>
+    <a href="#internal_link">Internal Link</a>
+    </body>
+    </html>
+    '''
+
+    expect_html = '''<html>
+    <head>
+    <title>Title</title>
+    </head>
+    <body>
+    <img src="http://kungfupeople.com/base/images/foo.jpg">
+    <img src="http://kungfupeople.com/base/images/bar.gif">
+    <img src="http://www.googe.com/photos/foo.jpg">
+    <a href="http://kungfupeople.com/base/home">Home</a>
+    <a href="http://www.peterbe.com">External</a>
+    <a href="http://kungfupeople.com/base/subpage">Subpage</a>
+    <a href="#internal_link">Internal Link</a>
+    </body>
+    </html>'''
+
+    p = Premailer(html, base_url='http://kungfupeople.com/base',
+                  preserve_internal_links=True)
+    result_html = p.transform()
+
+    whitespace_between_tags = re.compile('>\s*<',)
+
+    expect_html = whitespace_between_tags.sub('><', expect_html).strip()
+    result_html = whitespace_between_tags.sub('><', result_html).strip()
+
+    eq_(expect_html, result_html)
+
+
 def test_style_block_with_external_urls():
     """
     From http://github.com/peterbe/premailer/issues/#issue/2
@@ -1114,6 +1165,166 @@ def test_ignore_style_elements_with_media_attribute():
     result_html = p.transform()
 
     whitespace_between_tags = re.compile('>\s*<', )
+
+    expect_html = whitespace_between_tags.sub('><', expect_html).strip()
+    result_html = whitespace_between_tags.sub('><', result_html).strip()
+
+    eq_(expect_html, result_html)
+
+
+def test_leftover_important():
+    """Asserts that leftover styles should be marked as !important."""
+    if not etree:
+        # can't test it
+        return
+
+    html = """<html>
+    <head>
+    <title>Title</title>
+    <style type="text/css">
+    a { color: red; }
+    a:hover { color: green; }
+    a:focus { color: blue !important; }
+    </style>
+    </head>
+    <body>
+    <a href="#">Hi!</a>
+    </body>
+    </html>"""
+
+    expect_html = """<html>
+    <head>
+    <title>Title</title>
+    <style type="text/css">a:hover {color:green !important}
+a:focus {color:blue !important}</style>
+    </head>
+    <body>
+    <a href="#" style="color:red">Hi!</a>
+    </body>
+    </html>"""
+
+    p = Premailer(html,
+        keep_style_tags=True,
+        strip_important=False)
+    result_html = p.transform()
+
+    whitespace_between_tags = re.compile('>\s*<',)
+
+    expect_html = whitespace_between_tags.sub('><', expect_html).strip()
+    result_html = whitespace_between_tags.sub('><', result_html).strip()
+
+    eq_(expect_html, result_html)
+
+
+def test_basic_xml():
+    """Test the simplest case with xml"""
+    if not etree:
+        # can't test it
+        return
+
+    html = """<html>
+<head>
+<title>Title</title>
+<style type="text/css">
+img { border: none; }
+</style>
+</head>
+<body>
+<img src="test.png" alt="test">
+</body>
+</html>"""
+
+    expect_html = """<html>
+<head>
+<title>Title</title>
+</head>
+<body>
+<img src="test.png" alt="test" style="border:none"/>
+</body>
+</html>"""
+
+    p = Premailer(html, method="xml")
+    result_html = p.transform()
+
+    whitespace_between_tags = re.compile('>\s*<',)
+
+    expect_html = whitespace_between_tags.sub('><', expect_html).strip()
+    result_html = whitespace_between_tags.sub('><', result_html).strip()
+
+    eq_(expect_html, result_html)
+
+
+def test_xml_cdata():
+    """Test that CDATA is set correctly on remaining styles"""
+    if not etree:
+        # can't test it
+        return
+
+    html = """<html>
+<head>
+<title>Title</title>
+<style type="text/css">
+span:hover > a { background: red; }
+</style>
+</head>
+<body>
+<span><a>Test</a></span>
+</body>
+</html>"""
+
+    expect_html = """<html>
+<head>
+<title>Title</title>
+<style type="text/css">/*<![CDATA[*/span:hover > a {background:red}/*]]>*/</style>
+</head>
+<body>
+<span><a>Test</a></span>
+</body>
+</html>"""
+
+    p = Premailer(html, method="xml")
+    result_html = p.transform()
+
+    whitespace_between_tags = re.compile('>\s*<',)
+
+    expect_html = whitespace_between_tags.sub('><', expect_html).strip()
+    result_html = whitespace_between_tags.sub('><', result_html).strip()
+
+    eq_(expect_html, result_html)
+
+
+def test_xml_cdata():
+    """Test that CDATA is set correctly on remaining styles"""
+    if not etree:
+        # can't test it
+        return
+
+    html = """<html>
+    <head>
+    <title>Title</title>
+    <style type="text/css">
+    span:hover > a { background: red; }
+    </style>
+    </head>
+    <body>
+    <span><a>Test</a></span>
+    </body>
+    </html>"""
+
+    expect_html = """<html>
+    <head>
+    <title>Title</title>
+    <style type="text/css">/*<![CDATA[*/span:hover > a {background:red}/*]]>*/</style>
+    </head>
+    <body>
+    <span><a>Test</a></span>
+    </body>
+    </html>"""
+
+    p = Premailer(html, method="xml")
+    result_html = p.transform()
+
+    whitespace_between_tags = re.compile('>\s*<',)
 
     expect_html = whitespace_between_tags.sub('><', expect_html).strip()
     result_html = whitespace_between_tags.sub('><', result_html).strip()
